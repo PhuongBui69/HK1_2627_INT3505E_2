@@ -3,7 +3,7 @@ from flask import Flask, jsonify, request
 app = Flask(__name__)
 
 _next = 2
-BOOKS = [{"id":1,"title":"Clean Code", "author":"R. Martin"}]
+BOOKS = [{"id":1,"title":"Clean Code", "author":"R. Martin", "year": 2008}]
 
 def find(bid):
     return next((b for b in BOOKS if b["id"] == bid), None)
@@ -11,8 +11,18 @@ def find(bid):
 # LIST GET /books
 @app.route("/books", methods=["GET"])
 def list_books():
+    q = request.args.get("q", "").strip().lower()
+    sort_by = request.args.get("sort", "").strip().lower()
+    
+    result = BOOKS
+    if q:
+        result = [b for b in result if q in b["title"].lower()]
+        
+    if sort_by == "title":
+        result = sorted(result, key=lambda b: b.get("title", "").lower())
+        
     n = int(request.args.get("limit", 100))
-    return jsonify(BOOKS[:n]), 200
+    return jsonify(result[:n]), 200
 
 # DETAIL GET /books/<int:bid>
 @app.route("/books/<int:bid>", methods=["GET"])
@@ -27,11 +37,15 @@ def create_book():
     global _next
     body = request.get_json(silent=True) or {}
     t, a = body.get("title"), body.get("author")
+    year = body.get("year")
     
     if not t or not a:
         return {"error":"need title+author"}, 400
         
-    book = {"id":_next, "title":t, "author":a}
+    if year is None or type(year) is not int or year < 1900:
+        return {"error":"year must be an integer >= 1900"}, 400
+        
+    book = {"id":_next, "title":t, "author":a, "year": year}
     _next += 1
     BOOKS.append(book)
     
@@ -44,7 +58,12 @@ def modify_book(bid):
     if not book: return {"error":"not found"}, 404
     
     if request.method == "PUT":
-        book.update(request.get_json(silent=True) or {})
+        body = request.get_json(silent=True) or {}
+        if "year" in body:
+            year = body["year"]
+            if type(year) is not int or year < 1900:
+                return {"error": "year must be an integer >= 1900"}, 400
+        book.update(body)
         return jsonify(book), 200
         
     BOOKS.remove(book)
