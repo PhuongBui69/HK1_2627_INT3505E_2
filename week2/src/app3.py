@@ -1,7 +1,33 @@
 from flask import Flask, jsonify, request, make_response
 
 app = Flask(__name__)
-BOOKS = []
+BOOKS = [
+    {"id": 1, "title": "Clean Code", "author": "Robert C. Martin"},
+    {"id": 2, "title": "Clean Architecture", "author": "Robert C. Martin"},
+    {"id": 3, "title": "The Pragmatic Programmer", "author": "Andrew Hunt"},
+    {"id": 4, "title": "1984", "author": "George Orwell"},
+    {"id": 5, "title": "Animal Farm", "author": "George Orwell"},
+    {"id": 6, "title": "Design Patterns", "author": "Erich Gamma"},
+    {"id": 7, "title": "Refactoring", "author": "Martin Fowler"},
+    {"id": 8, "title": "Domain-Driven Design", "author": "Eric Evans"},
+    {"id": 9, "title": "Introduction to Algorithms", "author": "Thomas H. Cormen"},
+    {"id": 10, "title": "Code Complete", "author": "Steve McConnell"},
+    {"id": 11, "title": "The Mythical Man-Month", "author": "Frederick P. Brooks Jr."},
+    {"id": 12, "title": "Head First Design Patterns", "author": "Eric Freeman"},
+    {"id": 13, "title": "Python Crash Course", "author": "Eric Matthes"},
+    {"id": 14, "title": "Fluent Python", "author": "Luciano Ramalho"},
+    {"id": 15, "title": "Grokking Algorithms", "author": "Aditya Bhargava"},
+    {"id": 16, "title": "Clean Agile", "author": "Robert C. Martin"},
+    {"id": 17, "title": "Structure and Interpretation of Computer Programs", "author": "Harold Abelson"},
+    {"id": 18, "title": "Computer Systems: A Programmer's Perspective", "author": "Randal E. Bryant"},
+    {"id": 19, "title": "Operating System Concepts", "author": "Abraham Silberschatz"},
+    {"id": 20, "title": "Compilers: Principles, Techniques, and Tools", "author": "Alfred V. Aho"},
+    {"id": 21, "title": "Homage to Catalonia", "author": "George Orwell"},
+    {"id": 22, "title": "Down and Out in Paris and London", "author": "George Orwell"},
+    {"id": 23, "title": "Effective Java", "author": "Joshua Bloch"},
+    {"id": 24, "title": "Java Concurrency in Practice", "author": "Brian Goetz"},
+    {"id": 25, "title": "Spring in Action", "author": "Craig Walls"},
+]
 
 # ----- tham số phân trang
 DEFAULT_SIZE, MAX_SIZE = 20, 100
