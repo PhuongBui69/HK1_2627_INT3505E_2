@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Mock data để test
+# Mock data
 BOOKS = [
     {"id": "1", "title": "Lap trinh Python"},
     {"id": "2", "title": "Flask co ban"}
@@ -14,7 +14,7 @@ def find_by_id(book_id):
             return book
     return None
 
-# Path params biến trong URL
+# Path params
 @app.route("/books/<book_id>", methods=["GET"])
 def get_book(book_id):
     book = find_by_id(book_id)
@@ -22,12 +22,11 @@ def get_book(book_id):
         return jsonify({"error": "not found"}), 404
     return jsonify(book), 200
 
-# Ép kiểu int ngay từ URL
 @app.route("/items/<int:item_id>")
 def get_item(item_id): # int sẵn
     return jsonify({"id": item_id}), 200
 
-# Query string bộ lọc / phân trang
+# Query string 
 @app.route("/books", methods=["GET"])
 def list_books():
     limit = int(request.args.get("limit", 20))
