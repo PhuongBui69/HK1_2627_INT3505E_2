@@ -74,167 +74,187 @@ def init_db():
 
 # --- APP 1 + 3: GET list + filter + paginate + links & POST create ---
 
-@app.route("/books", methods=["GET", "POST"])
-def books_endpoint():
+@app.get("/books")
+def get_books():
     db = get_db()
+    try:
+        page = int(request.args.get("page", 1))
+        size = int(request.args.get("size", DEFAULT_SIZE))
+    except ValueError:
+        return jsonify(error="page and size must be int"), 400
+    page = max(page, 1); size = max(min(size, MAX_SIZE), 1)
     
-    if request.method == "GET":
-        try:
-            page = int(request.args.get("page", 1))
-            size = int(request.args.get("size", DEFAULT_SIZE))
-        except ValueError:
-            return jsonify(error="page and size must be int"), 400
-        page = max(page, 1); size = max(min(size, MAX_SIZE), 1)
+    # Build query
+    query = "SELECT * FROM books WHERE 1=1"
+    params = []
+    
+    a = request.args.get("author")
+    if a:
+        query += " AND LOWER(author) = ?"
+        params.append(a.lower())
         
-        # Build query
-        query = "SELECT * FROM books WHERE 1=1"
-        params = []
+    q = request.args.get("q")
+    if q:
+        query += " AND LOWER(title) LIKE ?"
+        params.append(f"%{q.lower()}%")
         
-        a = request.args.get("author")
-        if a:
-            query += " AND LOWER(author) = ?"
-            params.append(a.lower())
-            
-        q = request.args.get("q")
-        if q:
-            query += " AND LOWER(title) LIKE ?"
-            params.append(f"%{q.lower()}%")
-            
-        # Count total for pagination
-        cur = db.execute(f"SELECT COUNT(*) FROM ({query})", params)
-        total = cur.fetchone()[0]
-        
-        # Add pagination
-        offset = (page - 1) * size
-        query += " LIMIT ? OFFSET ?"
-        params.extend([size, offset])
-        
-        # Fetch items
-        cur = db.execute(query, params)
-        # Exclude etag from the GET list body to save bandwidth (or include it if you wish)
-        items = []
-        for row in cur.fetchall():
-            rec = dict(row)
-            rec.pop("etag", None)
-            items.append(rec)
-        
-        last = max((total + size - 1) // size, 1) if total > 0 else 0
-        
-        # HATEOAS links
-        def u(p): return f"/books?page={p}&size={size}"
-        links = {
-            "self": {"href": u(page)},
-            "first": {"href": u(1)},
-            "last": {"href": u(max(last, 1))}
-        }
-        if page > 1: links["prev"] = {"href": u(page - 1)}
-        if offset + size < total: links["next"] = {"href": u(page + 1)}
-        
-        body = {
-            "data": items,
-            "pagination": {"page": page, "size": size, "total": total, "total_pages": last},
-            "_links": links
-        }
-        resp = make_response(jsonify(body), 200)
-        resp.headers["Cache-Control"] = "public, max-age=30"
-        return resp
+    # Count total for pagination
+    cur = db.execute(f"SELECT COUNT(*) FROM ({query})", params)
+    total = cur.fetchone()[0]
+    
+    # Add pagination
+    offset = (page - 1) * size
+    query += " LIMIT ? OFFSET ?"
+    params.extend([size, offset])
+    
+    # Fetch items
+    cur = db.execute(query, params)
+    # Exclude etag from the GET list body
+    items = []
+    for row in cur.fetchall():
+        rec = dict(row)
+        rec.pop("etag", None)
+        items.append(rec)
+    
+    last = max((total + size - 1) // size, 1) if total > 0 else 0
+    
+    # HATEOAS links
+    def u(p): return f"/books?page={p}&size={size}"
+    links = {
+        "self": {"href": u(page)},
+        "first": {"href": u(1)},
+        "last": {"href": u(max(last, 1))}
+    }
+    if page > 1: links["prev"] = {"href": u(page - 1)}
+    if offset + size < total: links["next"] = {"href": u(page + 1)}
+    
+    body = {
+        "data": items,
+        "pagination": {"page": page, "size": size, "total": total, "total_pages": last},
+        "_links": links
+    }
+    resp = make_response(jsonify(body), 200)
+    resp.headers["Cache-Control"] = "public, max-age=30"
+    return resp
 
-    elif request.method == "POST":
-        p = request.get_json(silent=True) or {}
-        t = (p.get("title") or "").strip()
-        a = (p.get("author") or "").strip()
-        if not t or not a:
-            return jsonify(error="title and author required"), 422
-            
-        etag = calc_etag(t, a, p.get("isbn"), p.get("price"))
-        cur = db.execute('INSERT INTO books (title, author, isbn, price, etag) VALUES (?, ?, ?, ?, ?)', 
-                         (t, a, p.get("isbn"), p.get("price"), etag))
-        db.commit()
+
+@app.post("/books")
+def create_book():
+    db = get_db()
+    p = request.get_json(silent=True) or {}
+    t = (p.get("title") or "").strip()
+    a = (p.get("author") or "").strip()
+    if not t or not a:
+        return jsonify(error="title and author required"), 422
         
-        new_id = cur.lastrowid
-        cur = db.execute('SELECT * FROM books WHERE id = ?', (new_id,))
-        new_book = dict(cur.fetchone())
-        new_book.pop("etag", None)
-        
-        resp = make_response(jsonify(new_book), 201)
-        resp.headers["Location"] = f"/books/{new_id}"
-        resp.headers["ETag"] = etag
-        return resp
+    etag = calc_etag(t, a, p.get("isbn"), p.get("price"))
+    cur = db.execute('INSERT INTO books (title, author, isbn, price, etag) VALUES (?, ?, ?, ?, ?)', 
+                     (t, a, p.get("isbn"), p.get("price"), etag))
+    db.commit()
+    
+    new_id = cur.lastrowid
+    cur = db.execute('SELECT * FROM books WHERE id = ?', (new_id,))
+    new_book = dict(cur.fetchone())
+    new_book.pop("etag", None)
+    
+    resp = make_response(jsonify(new_book), 201)
+    resp.headers["Location"] = f"/books/{new_id}"
+    resp.headers["ETag"] = etag
+    return resp
 
 # --- APP 2: GET (single) + PUT + PATCH + DELETE ---
 
-@app.route("/books/<int:bid>", methods=["GET", "PUT", "PATCH", "DELETE"])
-def book_endpoint(bid):
+@app.get("/books/<int:bid>")
+def get_book(bid):
     db = get_db()
-    
-    # Check if exists
     cur = db.execute('SELECT * FROM books WHERE id = ?', (bid,))
     row = cur.fetchone()
     if row is None:
         return jsonify(error="not found"), 404
         
-    if request.method == "GET":
-        record = dict(row)
-        etag = record.pop("etag", None)
+    record = dict(row)
+    etag = record.pop("etag", None)
+    
+    if request.headers.get("If-None-Match") == etag:
+        return "", 304
         
-        if request.headers.get("If-None-Match") == etag:
-            return "", 304
-            
-        resp = make_response(jsonify(record), 200)
-        resp.headers["Cache-Control"] = "max-age=60"
-        if etag:
-            resp.headers["ETag"] = etag
-        return resp
-        
-    elif request.method == "PUT":
-        p = request.get_json(silent=True) or {}
-        t = (p.get("title") or "").strip()
-        a = (p.get("author") or "").strip()
-        if not t or not a:
-            return jsonify(error="need title+author"), 422
-            
-        etag = calc_etag(t, a, p.get("isbn"), p.get("price"))
-        db.execute('UPDATE books SET title = ?, author = ?, isbn = ?, price = ?, etag = ? WHERE id = ?',
-                   (t, a, p.get("isbn"), p.get("price"), etag, bid))
-        db.commit()
-        
-        cur = db.execute('SELECT * FROM books WHERE id = ?', (bid,))
-        updated = dict(cur.fetchone())
-        updated.pop("etag", None)
-        
-        resp = make_response(jsonify(updated), 200)
+    resp = make_response(jsonify(record), 200)
+    resp.headers["Cache-Control"] = "max-age=60"
+    if etag:
         resp.headers["ETag"] = etag
-        return resp
+    return resp
+
+
+@app.put("/books/<int:bid>")
+def replace_book(bid):
+    db = get_db()
+    cur = db.execute('SELECT * FROM books WHERE id = ?', (bid,))
+    if cur.fetchone() is None:
+        return jsonify(error="not found"), 404
         
-    elif request.method == "PATCH":
-        p = request.get_json(silent=True) or {}
-        if p.get("price", 0) < 0:
-            return jsonify(error="price must be positive"), 422
+    p = request.get_json(silent=True) or {}
+    t = (p.get("title") or "").strip()
+    a = (p.get("author") or "").strip()
+    if not t or not a:
+        return jsonify(error="need title+author"), 422
+        
+    etag = calc_etag(t, a, p.get("isbn"), p.get("price"))
+    db.execute('UPDATE books SET title = ?, author = ?, isbn = ?, price = ?, etag = ? WHERE id = ?',
+               (t, a, p.get("isbn"), p.get("price"), etag, bid))
+    db.commit()
+    
+    cur = db.execute('SELECT * FROM books WHERE id = ?', (bid,))
+    updated = dict(cur.fetchone())
+    updated.pop("etag", None)
+    
+    resp = make_response(jsonify(updated), 200)
+    resp.headers["ETag"] = etag
+    return resp
+
+
+@app.patch("/books/<int:bid>")
+def update_book(bid):
+    db = get_db()
+    cur = db.execute('SELECT * FROM books WHERE id = ?', (bid,))
+    row = cur.fetchone()
+    if row is None:
+        return jsonify(error="not found"), 404
+        
+    p = request.get_json(silent=True) or {}
+    if p.get("price", 0) < 0:
+        return jsonify(error="price must be positive"), 422
+        
+    # Update dynamically
+    current = dict(row)
+    for k in "title author isbn price".split():
+        if k in p:
+            current[k] = p[k] if not isinstance(p[k], str) else p[k].strip()
             
-        # Update dynamically
-        current = dict(row)
-        for k in "title author isbn price".split():
-            if k in p:
-                current[k] = p[k] if not isinstance(p[k], str) else p[k].strip()
-                
-        new_etag = calc_etag(current.get("title"), current.get("author"), current.get("isbn"), current.get("price"))
+    new_etag = calc_etag(current.get("title"), current.get("author"), current.get("isbn"), current.get("price"))
+    
+    db.execute('UPDATE books SET title = ?, author = ?, isbn = ?, price = ?, etag = ? WHERE id = ?',
+               (current.get("title"), current.get("author"), current.get("isbn"), current.get("price"), new_etag, bid))
+    db.commit()
         
-        db.execute('UPDATE books SET title = ?, author = ?, isbn = ?, price = ?, etag = ? WHERE id = ?',
-                   (current.get("title"), current.get("author"), current.get("isbn"), current.get("price"), new_etag, bid))
-        db.commit()
-            
-        cur = db.execute('SELECT * FROM books WHERE id = ?', (bid,))
-        updated = dict(cur.fetchone())
-        updated.pop("etag", None)
+    cur = db.execute('SELECT * FROM books WHERE id = ?', (bid,))
+    updated = dict(cur.fetchone())
+    updated.pop("etag", None)
+    
+    resp = make_response(jsonify(updated), 200)
+    resp.headers["ETag"] = new_etag
+    return resp
+
+
+@app.delete("/books/<int:bid>")
+def delete_book(bid):
+    db = get_db()
+    cur = db.execute('SELECT * FROM books WHERE id = ?', (bid,))
+    if cur.fetchone() is None:
+        return jsonify(error="not found"), 404
         
-        resp = make_response(jsonify(updated), 200)
-        resp.headers["ETag"] = new_etag
-        return resp
-        
-    elif request.method == "DELETE":
-        db.execute('DELETE FROM books WHERE id = ?', (bid,))
-        db.commit()
-        return "", 204
+    db.execute('DELETE FROM books WHERE id = ?', (bid,))
+    db.commit()
+    return "", 204
 
 if __name__ == "__main__":
     init_db()
