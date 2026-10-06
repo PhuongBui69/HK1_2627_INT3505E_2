@@ -36,3 +36,20 @@
 └── /tags
     └── /{tag_id}
 ```
+
+## 4. Triển khai cho collections /posts
+
+1. Create tài nguyên
+![alt text](image/image.png)
+
+2. Lấy danh sách tài nguyên
+![alt text](image/image-1.png)
+
+3. Lấy chi tiết một tài nguyên
+![alt text](image/image-2.png)
+
+4. Update tài nguyên
+![alt text](image/image-3.png)
+
+5. Delete tài nguyên
+![alt text](image/image-4.png)

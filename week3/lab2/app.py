@@ -82,7 +82,6 @@ def handle_unhandled_exception(e):
 
 # --- ROUTE KIỂM THỬ ---
 
-# Route demo giống trong slide
 @app.route('/users/<int:id>', methods=['GET'])
 def get_user(id):
     # Giả lập database: chỉ có user id 42
