@@ -1,44 +1,39 @@
-"""Runnable Tasks API demo using Flask-Smorest.
+"""Tasks API with a separate, hand-authored OpenAPI YAML specification.
 
 Run:
     pip install -r requirements.txt
     python app.py
 
-OpenAPI document: http://127.0.0.1:5000/openapi.json
-Swagger UI:       http://127.0.0.1:5000/docs
+OpenAPI JSON: http://127.0.0.1:5000/openapi.json
+Swagger UI:   http://127.0.0.1:5000/docs
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import UUID, uuid4
 
-from flask import Flask, current_app
-from flask.views import MethodView
-from flask_smorest import Api, Blueprint, abort
-from marshmallow import Schema, ValidationError, fields, validate, validates_schema
+import yaml
+from flask import Flask, Response, current_app, jsonify, request
+from marshmallow import Schema, ValidationError, fields, validate
 
 VALID_STATUSES = ("open", "in_progress", "done")
 VALID_PRIORITIES = ("low", "normal", "high")
+SPEC_FILE = Path(__file__).resolve().with_name("tasks-api.yaml")
 
 
-# ---------------------------------------------------------------------------
-# Request/response schemas. Flask-Smorest uses these both for validation and
-# for generating the OpenAPI document.
-# ---------------------------------------------------------------------------
+# Marshmallow schemas validate runtime request data. The independently authored
+# tasks-api.yaml is the document served to OpenAPI clients and Swagger UI.
 class TaskSchema(Schema):
-    """The Task representation returned by the API."""
-
-    id = fields.UUID(dump_only=True, metadata={"description": "Unique task ID"})
+    id = fields.UUID(dump_only=True)
     title = fields.String(required=True, validate=validate.Length(min=1, max=200))
-    status = fields.String(validate=validate.OneOf(VALID_STATUSES))
-    priority = fields.String(validate=validate.OneOf(VALID_PRIORITIES))
-    due_date = fields.Date(data_key="dueDate", allow_none=True)
-    assignee_id = fields.UUID(data_key="assigneeId", allow_none=True)
+    status = fields.String(required=True, validate=validate.OneOf(VALID_STATUSES))
+    priority = fields.String(required=True, validate=validate.OneOf(VALID_PRIORITIES))
+    due_date = fields.Date(data_key="dueDate", allow_none=True, required=True)
+    assignee_id = fields.UUID(data_key="assigneeId", allow_none=True, required=True)
 
 
 class CreateTaskSchema(Schema):
-    """Fields accepted when creating a task."""
-
     title = fields.String(required=True, validate=validate.Length(min=1, max=200))
     status = fields.String(
         load_default="open", validate=validate.OneOf(VALID_STATUSES)
@@ -51,119 +46,58 @@ class CreateTaskSchema(Schema):
 
 
 class UpdateTaskSchema(Schema):
-    """Optional fields for partial updates."""
-
     title = fields.String(validate=validate.Length(min=1, max=200))
     status = fields.String(validate=validate.OneOf(VALID_STATUSES))
     priority = fields.String(validate=validate.OneOf(VALID_PRIORITIES))
     due_date = fields.Date(data_key="dueDate", allow_none=True)
     assignee_id = fields.UUID(data_key="assigneeId", allow_none=True)
 
-    @validates_schema
-    def require_at_least_one_field(self, data, **kwargs):
-        if not data:
-            raise ValidationError("Provide at least one field to update.")
-
 
 class ListTasksQuerySchema(Schema):
-    """Query parameters used by GET /tasks."""
-
     limit = fields.Integer(
         load_default=20,
         validate=validate.Range(min=1, max=100),
-        metadata={"description": "Maximum number of tasks to return (1-100)"},
     )
-    status = fields.String(
-        required=False,
-        validate=validate.OneOf(VALID_STATUSES),
-        metadata={"description": "Filter by task status"},
-    )
+    status = fields.String(validate=validate.OneOf(VALID_STATUSES))
 
 
-blp = Blueprint(
-    "tasks",
-    __name__,
-    url_prefix="/tasks",
-    description="Create, list, retrieve, update, and delete tasks.",
-)
+TASK_SCHEMA = TaskSchema()
+TASK_LIST_SCHEMA = TaskSchema(many=True)
+CREATE_TASK_SCHEMA = CreateTaskSchema()
+UPDATE_TASK_SCHEMA = UpdateTaskSchema()
+LIST_QUERY_SCHEMA = ListTasksQuerySchema()
 
 
 def _store() -> dict[str, dict]:
-    """Return the in-memory store belonging to the current Flask application."""
     return current_app.extensions["task_store"]
 
 
-def _normalize_task(task: dict) -> dict:
-    """Return all response fields, including nullable fields, consistently."""
-    return {
-        "id": task["id"],
-        "title": task["title"],
-        "status": task["status"],
-        "priority": task["priority"],
-        "due_date": task.get("due_date"),
-        "assignee_id": task.get("assignee_id"),
-    }
+def _serialize_task(task: dict) -> dict:
+    return TASK_SCHEMA.dump(task)
 
 
-def _find_task(task_id: UUID) -> dict:
-    task = _store().get(str(task_id))
-    if task is None:
-        abort(404, message=f"Task '{task_id}' was not found.")
-    return task
+def _load_json(schema: Schema) -> dict:
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise ValidationError({"_schema": ["JSON request body must be an object."]})
+    return schema.load(payload)
 
 
-@blp.route("")
-class TasksCollection(MethodView):
-    @blp.doc(
-        summary="List tasks",
-        description="Return tasks, optionally filtered by status and limited in number.",
-    )
-    @blp.arguments(ListTasksQuerySchema, location="query")
-    @blp.response(200, TaskSchema(many=True))
-    def get(self, query_args: dict):
-        tasks = list(_store().values())
-        if query_args.get("status"):
-            tasks = [task for task in tasks if task["status"] == query_args["status"]]
-        return [_normalize_task(task) for task in tasks[: query_args["limit"]]]
-
-    @blp.doc(
-        summary="Create a task",
-        description="Create a task. Status defaults to open and priority defaults to normal.",
-    )
-    @blp.arguments(CreateTaskSchema)
-    @blp.response(201, TaskSchema)
-    def post(self, new_task: dict):
-        task = {"id": uuid4(), **new_task}
-        key = str(task["id"])
-        _store()[key] = task
-        return _normalize_task(task)
+def _validation_response(error: ValidationError):
+    return jsonify({"message": "Request validation failed.", "errors": error.messages}), 422
 
 
-@blp.route("/<uuid:taskId>")
-class TaskById(MethodView):
-    @blp.doc(summary="Get a task by ID", responses={404: "Task not found"})
-    @blp.response(200, TaskSchema)
-    def get(self, taskId: UUID):
-        return _normalize_task(_find_task(taskId))
-
-    @blp.doc(
-        summary="Update a task partially",
-        description="Only the fields included in the request body are changed.",
-        responses={404: "Task not found"},
-    )
-    @blp.arguments(UpdateTaskSchema)
-    @blp.response(200, TaskSchema)
-    def patch(self, changes: dict, taskId: UUID):
-        task = _find_task(taskId)
-        task.update(changes)
-        return _normalize_task(task)
-
-    @blp.doc(summary="Delete a task", responses={404: "Task not found"})
-    @blp.response(204)
-    def delete(self, taskId: UUID):
-        _find_task(taskId)
-        del _store()[str(taskId)]
+def _parse_task_id(raw_id: str) -> UUID | None:
+    try:
+        return UUID(raw_id)
+    except (ValueError, TypeError, AttributeError):
         return None
+
+
+def _find_task(task_id: UUID) -> dict | None:
+    return _store().get(str(task_id))
 
 
 def _new_task(
@@ -183,41 +117,118 @@ def _new_task(
     }
 
 
-def create_app(*, seed_data: bool = True) -> Flask:
+def create_app(*, seed_data: bool = True, spec_path: Path | None = None) -> Flask:
     app = Flask(__name__)
-    app.config.update(
-        API_TITLE="Tasks API",
-        API_VERSION="v1",
-        OPENAPI_VERSION="3.0.3",
-        # Flask-Smorest creates GET /openapi.json and Swagger UI at /docs.
-        OPENAPI_URL_PREFIX="/",
-        OPENAPI_JSON_PATH="openapi.json",
-        OPENAPI_SWAGGER_UI_PATH="/docs",
-        OPENAPI_SWAGGER_UI_URL="https://cdn.jsdelivr.net/npm/swagger-ui-dist/",
-    )
+    app.config["OPENAPI_SPEC_PATH"] = str(spec_path or SPEC_FILE)
 
-    api = Api(app)
-    api.register_blueprint(blp)
+    # GET /openapi.json reads the separate YAML and returns it as JSON, as
+    # requested by the assignment. Swagger UI loads this same endpoint.
+    @app.get("/openapi.json")
+    def openapi_json():
+        path = Path(current_app.config["OPENAPI_SPEC_PATH"])
+        with path.open("r", encoding="utf-8") as file:
+            spec = yaml.safe_load(file)
+        return jsonify(spec)
 
-    # In-memory data keeps this teaching example runnable without a database.
-    # Data is reset every time the app process is restarted.
+    @app.get("/docs")
+    def swagger_docs():
+        html = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tasks API — Swagger UI</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      window.ui = SwaggerUIBundle({
+        url: "/openapi.json",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        displayRequestDuration: true
+      });
+    };
+  </script>
+</body>
+</html>"""
+        return Response(html, mimetype="text/html")
+
+    @app.get("/tasks")
+    def list_tasks():
+        try:
+            query = LIST_QUERY_SCHEMA.load(request.args.to_dict())
+        except ValidationError as error:
+            return _validation_response(error)
+
+        tasks = list(_store().values())
+        if query.get("status"):
+            tasks = [task for task in tasks if task["status"] == query["status"]]
+        return jsonify(TASK_LIST_SCHEMA.dump(tasks[: query["limit"]]))
+
+    @app.post("/tasks")
+    def create_task():
+        try:
+            data = _load_json(CREATE_TASK_SCHEMA)
+        except ValidationError as error:
+            return _validation_response(error)
+
+        task = _new_task(**data)
+        _store()[str(task["id"])] = task
+        return jsonify(_serialize_task(task)), 201
+
+    @app.get("/tasks/<task_id>")
+    def get_task(task_id: str):
+        parsed_id = _parse_task_id(task_id)
+        if parsed_id is None:
+            return jsonify({"message": "taskId must be a valid UUID."}), 400
+        task = _find_task(parsed_id)
+        if task is None:
+            return jsonify({"message": f"Task '{parsed_id}' was not found."}), 404
+        return jsonify(_serialize_task(task))
+
+    @app.patch("/tasks/<task_id>")
+    def patch_task(task_id: str):
+        parsed_id = _parse_task_id(task_id)
+        if parsed_id is None:
+            return jsonify({"message": "taskId must be a valid UUID."}), 400
+        task = _find_task(parsed_id)
+        if task is None:
+            return jsonify({"message": f"Task '{parsed_id}' was not found."}), 404
+
+        try:
+            changes = _load_json(UPDATE_TASK_SCHEMA)
+            if not changes:
+                raise ValidationError({"_schema": ["Provide at least one field to update."]})
+        except ValidationError as error:
+            return _validation_response(error)
+
+        task.update(changes)
+        return jsonify(_serialize_task(task))
+
+    @app.delete("/tasks/<task_id>")
+    def delete_task(task_id: str):
+        parsed_id = _parse_task_id(task_id)
+        if parsed_id is None:
+            return jsonify({"message": "taskId must be a valid UUID."}), 400
+        task = _find_task(parsed_id)
+        if task is None:
+            return jsonify({"message": f"Task '{parsed_id}' was not found."}), 404
+        del _store()[str(parsed_id)]
+        return "", 204
+
+    # In-memory data allows CRUD demonstrations without a database. The data
+    # resets when the app process restarts.
     task_store: dict[str, dict] = {}
     if seed_data:
-        samples = [
-            _new_task(
-                "Read the OpenAPI Petstore example",
-                status="open",
-                priority="high",
-                due_date=None,
-            ),
-            _new_task(
-                "Implement and test Tasks API",
-                status="in_progress",
-                priority="normal",
-                due_date=None,
-            ),
+        seed_tasks = [
+            _new_task("Read the OpenAPI Petstore example", priority="high"),
+            _new_task("Implement and test Tasks API", status="in_progress"),
         ]
-        task_store.update({str(task["id"]): task for task in samples})
+        task_store.update({str(task["id"]): task for task in seed_tasks})
     app.extensions["task_store"] = task_store
     return app
 

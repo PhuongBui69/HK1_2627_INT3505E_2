@@ -1,0 +1,254 @@
+openapi: 3.0.3
+info:
+  title: Tasks API
+  version: 1.0.0
+  description: API quản lý task nội bộ.
+
+servers:
+  - url: http://127.0.0.1:5000
+    description: Local development server
+
+tags:
+  - name: tasks
+    description: Tạo, xem, cập nhật và xóa task
+
+paths:
+  /tasks:
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      summary: Lấy danh sách task
+      description: Có thể giới hạn số lượng kết quả và lọc theo trạng thái.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Số task tối đa trả về (từ 1 đến 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          required: false
+          description: Chỉ lấy task có trạng thái tương ứng
+          schema:
+            type: string
+            enum: [open, in_progress, done]
+      responses:
+        '200':
+          description: Lấy danh sách thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    post:
+      tags: [tasks]
+      operationId: createTask
+      summary: Tạo task mới
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskInput'
+            example:
+              title: Hoàn thành bài OpenAPI
+              status: open
+              priority: high
+              dueDate: '2026-10-20'
+      responses:
+        '201':
+          description: Tạo task thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /tasks/{taskId}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        description: UUID của task
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [tasks]
+      operationId: getTaskById
+      summary: Lấy thông tin một task
+      responses:
+        '200':
+          description: Tìm thấy task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/InvalidTaskId'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [tasks]
+      operationId: patchTask
+      summary: Cập nhật một phần task
+      description: Chỉ những trường có trong request body mới được cập nhật.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskInput'
+            example:
+              status: done
+      responses:
+        '200':
+          description: Cập nhật task thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/InvalidTaskId'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [tasks]
+      operationId: deleteTask
+      summary: Xóa task
+      responses:
+        '204':
+          description: Xóa thành công; không có response body
+        '400':
+          $ref: '#/components/responses/InvalidTaskId'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  schemas:
+    Task:
+      type: object
+      required: [id, title, status, priority, dueDate, assigneeId]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: ID do server tạo
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Hoàn thành bài OpenAPI
+        status:
+          type: string
+          enum: [open, in_progress, done]
+          example: open
+        priority:
+          type: string
+          enum: [low, normal, high]
+          example: high
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+          example: '2026-10-20'
+        assigneeId:
+          type: string
+          format: uuid
+          nullable: true
+
+    CreateTaskInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        status:
+          type: string
+          enum: [open, in_progress, done]
+          default: open
+        priority:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        assigneeId:
+          type: string
+          format: uuid
+          nullable: true
+
+    UpdateTaskInput:
+      type: object
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        status:
+          type: string
+          enum: [open, in_progress, done]
+        priority:
+          type: string
+          enum: [low, normal, high]
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        assigneeId:
+          type: string
+          format: uuid
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+
+  responses:
+    ValidationError:
+      description: Request body hoặc query parameter không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidTaskId:
+      description: taskId không phải UUID hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Không tìm thấy task
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
