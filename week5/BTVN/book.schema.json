@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Book Resource",
+  "description": "API representation returned for a book. The $defs.createRequest schema validates the body of POST /books.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "isbn",
+    "price",
+    "stock",
+    "category"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "\\S"
+    },
+    "isbn": {
+      "type": "string",
+      "pattern": "^\\d{13}$",
+      "description": "ISBN-13 represented as 13 digits."
+    },
+    "price": {
+      "$ref": "#/$defs/money"
+    },
+    "stock": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "category": {
+      "$ref": "#/$defs/categorySummary"
+    },
+    "authors": {
+      "type": "array",
+      "description": "Optional embedded author summaries; the API also exposes GET /books/{id}/authors.",
+      "items": {
+        "$ref": "#/$defs/bookAuthor"
+      }
+    }
+  },
+  "$defs": {
+    "money": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "currency"
+      ],
+      "properties": {
+        "amount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "currency": {
+          "const": "VND"
+        }
+      }
+    },
+    "categorySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "slug"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "\\S"
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      }
+    },
+    "bookAuthor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "role"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "\\S"
+        },
+        "role": {
+          "enum": [
+            "lead",
+            "co",
+            "ed"
+          ]
+        }
+      }
+    },
+    "createRequest": {
+      "title": "Create Book Request",
+      "description": "Request body for POST /books. The server generates id; author associations are managed through /books/{id}/authors.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "isbn",
+        "price",
+        "stock",
+        "categoryId"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "\\S"
+        },
+        "isbn": {
+          "type": "string",
+          "pattern": "^\\d{13}$"
+        },
+        "price": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "amount",
+            "currency"
+          ],
+          "properties": {
+            "amount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "currency": {
+              "const": "VND"
+            }
+          }
+        },
+        "stock": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "categoryId": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

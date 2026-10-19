@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Order Resource",
+  "description": "API representation returned for an order. The $defs.createRequest schema validates the body of POST /orders.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "userId",
+    "createdAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "userId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "createRequest": {
+      "title": "Create Order Request",
+      "description": "Request body for POST /orders. Item prices are determined and snapshotted by the server; the client cannot supply unitPrice.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userId",
+        "items"
+      ],
+      "properties": {
+        "userId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "bookId",
+              "quantity"
+            ],
+            "properties": {
+              "bookId": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "quantity": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "orderItemInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bookId",
+        "quantity"
+      ],
+      "properties": {
+        "bookId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

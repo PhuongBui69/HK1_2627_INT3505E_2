@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review Resource",
+  "description": "API representation returned for a review. The $defs.createRequest schema validates the body of POST /books/{id}/reviews.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "rating",
+    "bookId",
+    "userId"
+  ],
+  "properties": {
+    "id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "rating": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+    },
+    "bookId": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "userId": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "$defs": {
+    "createRequest": {
+      "title": "Create Review Request",
+      "description": "Request body for POST /books/{id}/reviews. bookId comes from the nested URL; the server generates the review id.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "userId",
+        "rating"
+      ],
+      "properties": {
+        "userId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rating": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      }
+    }
+  }
+}
