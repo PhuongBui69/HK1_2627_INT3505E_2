@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: Tasks API (Design-First với Connexion)
+  version: 1.0.0
+  description: >
+    API quản lý tasks theo phong cách Design-First.
+    Bản hợp đồng (Contract) này được thiết kế và thống nhất trước khi viết code.
+    Connexion đọc trực tiếp file này và tự động định tuyến (route) tới các hàm Python tương ứng
+    dựa vào `operationId` mà KHÔNG CẦN bất kỳ script sinh code thủ công nào.
+
+paths:
+  /tasks:
+    get:
+      summary: Lấy danh sách tasks
+      description: Trả về toàn bộ danh sách công việc hiện có
+      operationId: get_tasks
+      responses:
+        '200':
+          description: Lấy danh sách thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+
+    post:
+      summary: Tạo task mới
+      description: Tạo một công việc mới và lưu vào hệ thống
+      operationId: create_task
+      requestBody:
+        required: true
+        description: Thông tin task cần tạo
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: Tạo task thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Dữ liệu gửi lên không hợp lệ
+
+components:
+  schemas:
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - completed
+      properties:
+        id:
+          type: integer
+          description: ID của task
+          example: 1
+        title:
+          type: string
+          description: Tiêu đề công việc
+          example: "Làm bài tập Design-First với Connexion"
+        description:
+          type: string
+          description: Mô tả chi tiết công việc
+          example: "Viết openapi.yaml trước, Connexion tự động map route"
+        completed:
+          type: boolean
+          description: Trạng thái hoàn thành
+          example: false
+
+    TaskCreate:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          description: Tiêu đề công việc (bắt buộc)
+          example: "Làm bài tập Design-First với Connexion"
+        description:
+          type: string
+          description: Mô tả chi tiết công việc
+          example: "Viết openapi.yaml trước, Connexion tự động map route"
+        completed:
+          type: boolean
+          description: Trạng thái hoàn thành
+          default: false
+          example: false
