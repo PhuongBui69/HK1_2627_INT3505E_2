@@ -2,15 +2,24 @@ openapi: 3.0.3
 info:
   title: Books API — Lab 08
   version: 1.0.0
+  contact:
+    name: Books API Lab
   description: |
-    Educational API. Intentional contract defects remain for LAB 2.
+    Educational API for API testing and OpenAPI linting.
     The application is the reference for intended behavior.
 servers:
   - url: http://localhost:5000
+tags:
+  - name: Health
+    description: Local service health checks.
+  - name: Books
+    description: Create, read, update, and delete books.
 paths:
   /health:
     get:
       operationId: healthCheck
+      tags: [Health]
+      description: Check whether the local API is running.
       responses:
         '200':
           description: Service is ready
@@ -22,7 +31,9 @@ paths:
                   status: {type: string}
   /books:
     get:
-      # LAB 2 intentional issue 1: operationId is missing.
+      operationId: listBooks
+      tags: [Books]
+      description: List books with optional author and year filters and 20 items per page.
       parameters:
         - in: query
           name: author
@@ -43,6 +54,8 @@ paths:
                 items: {$ref: '#/components/schemas/Book'}
     post:
       operationId: createBook
+      tags: [Books]
+      description: Create a book; a duplicate non-null ISBN returns a conflict.
       requestBody:
         required: true
         content:
@@ -64,6 +77,8 @@ paths:
         schema: {type: integer, minimum: 1}
     get:
       operationId: getBook
+      tags: [Books]
+      description: Retrieve a book by its positive integer ID.
       responses:
         '200':
           description: Book found
@@ -73,6 +88,8 @@ paths:
         '404': {$ref: '#/components/responses/NotFound'}
     put:
       operationId: updateBook
+      tags: [Books]
+      description: Replace book data; omitted optional fields are set to null.
       requestBody:
         required: true
         content:
@@ -88,13 +105,11 @@ paths:
         '404': {$ref: '#/components/responses/NotFound'}
     delete:
       operationId: deleteBook
+      tags: [Books]
+      description: Delete an existing book and return an empty response.
       responses:
         '204':
           description: Deleted (response has no body)
-          # LAB 2 intentional issue 2: 204 incorrectly declares a body.
-          content:
-            application/json:
-              schema: {type: object}
         '404': {$ref: '#/components/responses/NotFound'}
 components:
   schemas:

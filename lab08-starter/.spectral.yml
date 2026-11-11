@@ -1,0 +1,64 @@
+extends: [spectral:oas]
+
+rules:
+  # A missing operationId must fail lint, rather than only emit a warning.
+  operation-operationId: error
+
+  no-content-on-204:
+    description: A 204 response must not declare a response body.
+    severity: error
+    given: "$.paths[*][*].responses['204']"
+    then:
+      field: content
+      function: undefined
+
+  book-year-is-integer:
+    description: Book.year must match the integer type of the Python model.
+    severity: error
+    given: $.components.schemas.Book.properties.year
+    then:
+      field: type
+      function: enumeration
+      functionOptions:
+        values: [integer]
+
+  response-200-has-fields:
+    description: A 200 JSON response must describe at least one object field, directly or in array items.
+    severity: error
+    # Resolve $ref before checking properties, including array items -> Book.
+    resolved: true
+    given: "$.paths[*][*].responses['200']"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: [content]
+          properties:
+            content:
+              type: object
+              required: [application/json]
+              properties:
+                application/json:
+                  type: object
+                  required: [schema]
+                  properties:
+                    schema:
+                      type: object
+                      required: [type]
+                      oneOf:
+                        - required: [properties]
+                          properties:
+                            type: {const: object}
+                            properties: &nonEmptyProperties
+                              type: object
+                              minProperties: 1
+                        - required: [items]
+                          properties:
+                            type: {const: array}
+                            items:
+                              type: object
+                              required: [type, properties]
+                              properties:
+                                type: {const: object}
+                                properties: *nonEmptyProperties
