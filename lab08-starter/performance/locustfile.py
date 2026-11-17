@@ -1,4 +1,7 @@
-"""Lab 4 starter: weighted tasks, optional 404, no deliberate server errors.
+"""Lab 4: weighted tasks and 1% client-side simulated failures for year searches.
+
+SIMULATED_500_CLIENT_SIDE is a Locust failure label, NOT an HTTP 500
+returned by Flask. Actual non-200 responses are recorded separately.
 
 Run: locust -f performance/locustfile.py --headless -H http://127.0.0.1:5000 \
          -u 10 -r 2 -t 30s --html reports/A.html
@@ -35,9 +38,31 @@ class BooksUser(HttpUser):
         unique = next(_counter)
         self.client.post(
             "/books",
-            json={"title": f"Load test {unique}", "author": "locust"},
+            json={"title": f"Load test {unique}", "author": "locust",
+                  "year": 2015 + unique % 10},
             name="POST /books",
         )
 
-    # LAB 4: add search_by_year() and explain any injected failures.
-    # A client-side artificial failure is not a real HTTP 500 from the server.
+    @task(1)
+    def search_by_year(self, year=None):
+        year = year if year is not None else random.randint(2015, 2024)
+        with self.client.get(
+            "/books", params={"year": year}, name="GET /books?year",
+            catch_response=True,
+        ) as response:
+            if response.status_code != 200:
+                response.failure(f"Unexpected HTTP {response.status_code}")
+                return
+            try:
+                books = response.json()
+                if not isinstance(books, list) or any(
+                    not isinstance(book, dict) or book.get("year") != year
+                    for book in books
+                ):
+                    response.failure("Year search returned invalid or unfiltered data")
+                    return
+            except ValueError:
+                response.failure("Year search returned invalid JSON")
+                return
+            if random.random() < 0.01:
+                response.failure("SIMULATED_500_CLIENT_SIDE (actual HTTP 200)")
