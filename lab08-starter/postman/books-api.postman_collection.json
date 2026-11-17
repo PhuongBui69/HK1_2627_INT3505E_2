@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Books API — Lab08 Starter",
-    "description": "Lab 3: add error-cases/ folder with POST missing title and GET missing id. Collection currently contains happy paths only.",
+    "description": "Lab 3: five happy-path requests and two error cases. Run with Newman using base_url from the environment. POST saves book_id in collection variables for GET, PUT and DELETE.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -67,13 +67,26 @@
           },
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset(\"book_id\");"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
-                  "pm.test(\"positive id\", () => pm.expect(pm.response.json().id).to.be.above(0));",
-                  "if (pm.response.code === 201) pm.collectionVariables.set(\"book_id\", pm.response.json().id);"
+                  "pm.test(\"positive integer id saved in collection variables\", () => {",
+                  "    const id = pm.response.json().id;",
+                  "    pm.expect(Number.isInteger(id)).to.eql(true);",
+                  "    pm.expect(id).to.be.above(0);",
+                  "    if (pm.response.code === 201) pm.collectionVariables.set(\"book_id\", id);",
+                  "});"
                 ]
               }
             }
@@ -102,7 +115,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"expected fields\", () => pm.expect(pm.response.json()).to.have.all.keys(\"id\", \"title\", \"author\", \"year\", \"isbn\"));"
+                  "pm.test(\"expected fields and created book id\", () => { const body = pm.response.json(); pm.expect(body).to.have.all.keys(\"id\", \"title\", \"author\", \"year\", \"isbn\"); pm.expect(body.id).to.eql(Number(pm.collectionVariables.get(\"book_id\"))); });"
                 ]
               }
             }
@@ -175,6 +188,92 @@
                 "exec": [
                   "pm.test(\"204 No Content\", () => pm.response.to.have.status(204));",
                   "pm.test(\"empty body\", () => pm.expect(pm.response.text()).to.eql(\"\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "error-cases",
+      "item": [
+        {
+          "name": "POST /books — missing title",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/books",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "books"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"author\": \"Kleppmann\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"validation error body identifies missing title\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+                  "    pm.expect(body.message).to.eql(\"Invalid book data\");",
+                  "    pm.expect(body.errors).to.be.an(\"array\");",
+                  "    pm.expect(body.errors.some(error => error.field === \"title\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /books/9999 — not found",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/books/9999",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "books",
+                "9999"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"not found error body\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(\"NOT_FOUND\");",
+                  "    pm.expect(body.message).to.eql(\"Book not found\");",
+                  "});"
                 ]
               }
             }

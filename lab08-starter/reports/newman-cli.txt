@@ -1,0 +1,71 @@
+Lab 3: real HTTP run against a temporary local Flask server and a fresh SQLite database.
+The normal instance/books.db was not used.
+$ ./node_modules/.bin/newman run books-api.postman_collection.json -e postman/local.postman_environment.json --env-var base_url=http://127.0.0.1:37101 -r cli,junit --reporter-junit-export reports/junit.xml
+
+newman
+
+Books API — Lab08 Starter
+
+❏ books
+↳ GET /books — initial list
+  GET http://127.0.0.1:37101/books [200 OK, 167B, 19ms]
+  ✓  200 OK
+  ✓  body is array
+
+↳ POST /books — create
+  POST http://127.0.0.1:37101/books [201 CREATED, 259B, 7ms]
+  ✓  201 Created
+  ✓  positive integer id saved in collection variables
+
+↳ GET /books/{id} — read
+  GET http://127.0.0.1:37101/books/1 [200 OK, 234B, 3ms]
+  ✓  200 OK
+  ✓  expected fields and created book id
+
+↳ PUT /books/{id} — replace
+  PUT http://127.0.0.1:37101/books/1 [200 OK, 242B, 4ms]
+  ✓  200 OK
+  ✓  updated title
+
+↳ DELETE /books/{id} — delete
+  DELETE http://127.0.0.1:37101/books/1 [204 NO CONTENT, 161B, 4ms]
+  ✓  204 No Content
+  ✓  empty body
+
+❏ error-cases
+↳ POST /books — missing title
+  POST http://127.0.0.1:37101/books [400 BAD REQUEST, 307B, 2ms]
+  ✓  400 Bad Request
+  ✓  validation error body identifies missing title
+
+↳ GET /books/9999 — not found
+  GET http://127.0.0.1:37101/books/9999 [404 NOT FOUND, 220B, 2ms]
+  ✓  404 Not Found
+  ✓  not found error body
+
+┌─────────────────────────┬─────────────────┬─────────────────┐
+│                         │        executed │          failed │
+├─────────────────────────┼─────────────────┼─────────────────┤
+│              iterations │               1 │               0 │
+├─────────────────────────┼─────────────────┼─────────────────┤
+│                requests │               7 │               0 │
+├─────────────────────────┼─────────────────┼─────────────────┤
+│            test-scripts │               7 │               0 │
+├─────────────────────────┼─────────────────┼─────────────────┤
+│      prerequest-scripts │               1 │               0 │
+├─────────────────────────┼─────────────────┼─────────────────┤
+│              assertions │              14 │               0 │
+├─────────────────────────┴─────────────────┴─────────────────┤
+│ total run duration: 148ms                                   │
+├─────────────────────────────────────────────────────────────┤
+│ total data received: 398B (approx)                          │
+├─────────────────────────────────────────────────────────────┤
+│ average response time: 5ms [min: 2ms, max: 19ms, s.d.: 5ms] │
+└─────────────────────────────────────────────────────────────┘
+(node:1393591) [DEP0176] DeprecationWarning: fs.F_OK is deprecated, use fs.constants.F_OK instead
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+Exit code: 0
+Wall-clock Newman execution: 0.721 seconds
+JUnit verified: 14 testcases, 0 failures, 0 errors.
+Runtime collection variable book_id verified by GET assertion; database empty after DELETE and error cases.
